@@ -39,6 +39,7 @@ namespace DataStructures.ViliWonka.Tests {
 
     public class KDTreeQueryTests : MonoBehaviour {
 
+        public int numObjects = 20000;
         public QType QueryType;
 
         public int K = 13;
@@ -51,13 +52,19 @@ namespace DataStructures.ViliWonka.Tests {
         public Vector3 IntervalSize = new Vector3(0.2f, 0.2f, 0.2f);
 
         Vector3[] pointCloud;
+
+        public Transform pointParent;
+        Transform[] pointTransforms;
+        Vector3 pointSize;
         KDTree tree;
 
         KDQuery query;
 
         void Awake() {
 
-            pointCloud = new Vector3[20000];
+            pointCloud = new Vector3[numObjects];
+            pointTransforms = new Transform[numObjects];
+            pointSize = 0.2f * Vector3.one;
 
             query = new KDQuery();
 
@@ -70,6 +77,12 @@ namespace DataStructures.ViliWonka.Tests {
                     (1f + Random.value * 0.25f)
                 );
 
+                GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Transform got = go.transform;
+                got.localScale = 0.2f * Vector3.one;
+                got.position = pointCloud[i];
+                got.parent = pointParent;
+                pointTransforms[i] = got;
             }
 
             for(int i = 0; i < pointCloud.Length; i++) {
@@ -78,6 +91,7 @@ namespace DataStructures.ViliWonka.Tests {
 
                     pointCloud[i] += LorenzStep(pointCloud[i]) * 0.01f;
                 }
+                pointTransforms[i].position = pointCloud[i];
             }
 
             tree = new KDTree(pointCloud, 32);
@@ -99,14 +113,43 @@ namespace DataStructures.ViliWonka.Tests {
 
         void Update() {
 
+            
             for(int i = 0; i < tree.Count; i++) {
 
                 tree.Points[i] += LorenzStep(tree.Points[i]) * Time.deltaTime * 0.1f;
+                pointTransforms[i].position = tree.Points[i];
+                pointTransforms[i].localScale = pointSize;
+                pointTransforms[i].rotation = Quaternion.identity;
             }
 
             tree.Rebuild();
+
+            List<int> resultIndices = new List<int>();
+            switch(QueryType) {
+                case QType.ClosestPoint:
+                    query.ClosestPoint(tree, transform.position, resultIndices);
+                    break;
+                case QType.KNearest:
+                    query.KNearest(tree, transform.position, K, resultIndices);
+                    break;
+                case QType.Radius:
+                    query.Radius(tree, transform.position, Radius, resultIndices);
+                    break;
+                case QType.Interval:
+                    query.Interval(tree, transform.position - IntervalSize/2f, transform.position + IntervalSize/2f, resultIndices);
+                    break;
+            }
+            
+            if (resultIndices.Count > 0) {
+                for(int i = 0; i < resultIndices.Count; i++) {
+                    Debug.Log(resultIndices[i]);
+                    pointTransforms[resultIndices[i]].localScale = 2f * pointSize;
+                    pointTransforms[resultIndices[i]].rotation = Quaternion.Euler(45f, 45f, 45f);
+                }
+            }
         }
 
+        /*
         private void OnDrawGizmos() {
 
             if(query == null) {
@@ -163,6 +206,7 @@ namespace DataStructures.ViliWonka.Tests {
             for(int i = 0; i < resultIndices.Count; i++) {
 
                 Gizmos.DrawCube(pointCloud[resultIndices[i]], 2f * size);
+
             }
 
             Gizmos.color = Color.green;
@@ -171,6 +215,6 @@ namespace DataStructures.ViliWonka.Tests {
             if(DrawQueryNodes) {
                 query.DrawLastQuery();
             }
-        }
+            */
     }
 }
