@@ -127,5 +127,109 @@ namespace DataStructures.ViliWonka.KDTree {
             }
         }
 
+        [System.Serializable]
+        public class DistanceResult<T> {
+            public T data;
+            public float distance;
+            public DistanceResult(T data, float distance) {
+                this.data = data;
+                this.distance = distance;
+            }
+        }
+
+        public void RadiusSort<T>(KDTree tree, Vector3 queryPosition, float queryRadius, List<DistanceResult<T>> results, T[] srcData) {
+
+            Reset();
+
+            Vector3[] points = tree.Points;
+            int[] permutation = tree.Permutation;
+
+            float squaredRadius = queryRadius * queryRadius;
+
+            var rootNode = tree.RootNode;
+
+            PushToQueue(rootNode, rootNode.bounds.ClosestPoint(queryPosition));
+
+            KDQueryNode queryNode = null;
+            KDNode node = null;
+
+            // KD search with pruning (don't visit areas which distance is more away than range)
+            // Recursion done on Stack
+            while(LeftToProcess > 0) {
+
+                queryNode = PopFromQueue();
+                node = queryNode.node;
+
+                if(!node.Leaf) {
+
+                    int partitionAxis = node.partitionAxis;
+                    float partitionCoord = node.partitionCoordinate;
+
+                    Vector3 tempClosestPoint = queryNode.tempClosestPoint;
+
+                    if((tempClosestPoint[partitionAxis] - partitionCoord) < 0) {
+
+                        // we already know we are inside negative bound/node,
+                        // so we don't need to test for distance
+                        // push to stack for later querying
+
+                        // tempClosestPoint is inside negative side
+                        // assign it to negativeChild
+                        PushToQueue(node.negativeChild, tempClosestPoint);
+
+                        tempClosestPoint[partitionAxis] = partitionCoord;
+
+                        float sqrDist = Vector3.SqrMagnitude(tempClosestPoint - queryPosition);
+
+                        // testing other side
+                        if(node.positiveChild.Count != 0
+                        && sqrDist <= squaredRadius) {
+
+                            PushToQueue(node.positiveChild, tempClosestPoint);
+                        }
+                    }
+                    else {
+
+                        // we already know we are inside positive bound/node,
+                        // so we don't need to test for distance
+                        // push to stack for later querying
+
+                        // tempClosestPoint is inside positive side
+                        // assign it to positiveChild
+                        PushToQueue(node.positiveChild, tempClosestPoint);
+
+                        // project the tempClosestPoint to other bound
+                        tempClosestPoint[partitionAxis] = partitionCoord;
+
+                        float sqrDist = Vector3.SqrMagnitude(tempClosestPoint - queryPosition);
+
+                        // testing other side
+                        if(node.negativeChild.Count != 0
+                        && sqrDist <= squaredRadius) {
+
+                            PushToQueue(node.negativeChild, tempClosestPoint);
+                        }
+                    }
+                }
+                else {
+
+                    // LEAF
+                    for(int i = node.start; i < node.end; i++) {
+
+                        int index = permutation[i];
+                        float sqrDistance = Vector3.SqrMagnitude(points[index] - queryPosition);
+
+                        if(sqrDistance <= squaredRadius) {
+                            DistanceResult<T> dataPoint = new DistanceResult<T>(srcData[index], sqrDistance);
+                            results.Add(dataPoint);
+                        }
+                    }
+
+                }
+            }
+
+            results.Sort((v1,v2)=>v1.distance.CompareTo(v2.distance));
+        }
+
     }
 }
